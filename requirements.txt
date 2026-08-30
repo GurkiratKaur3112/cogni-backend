@@ -1,0 +1,13 @@
+
+pinecone
+python-dotenv
+opencv-python
+yt-dlp
+youtube-transcript-api
+
+fastapi
+uvicorn[standard]
+python-multipart
+
+
+huggingface_hub
