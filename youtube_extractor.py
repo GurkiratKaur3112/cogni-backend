@@ -3,6 +3,14 @@ import cv2
 import json
 import re
 import yt_dlp
+import shutil
+
+
+
+print("========================================")
+print("yt-dlp:", yt_dlp.version.__version__)
+print("Node:", shutil.which("node"))
+print("========================================")
 
 
 class YouTubeFeatureExtractor:
@@ -34,6 +42,63 @@ class YouTubeFeatureExtractor:
                 path,
                 exist_ok=True
             )
+
+        # ==========================================================
+        # YOUTUBE COOKIES
+        # ==========================================================
+        #
+        # Render Secret File:
+        #
+        # /etc/secrets/youtube_cookies.txt
+        #
+        # Render Secret Files are READ-ONLY.
+        #
+        # Therefore we copy the cookie file to /tmp, which is
+        # writable, and give the writable copy to yt-dlp.
+        #
+        # ==========================================================
+
+        secret_cookie_file = os.getenv(
+            "YOUTUBE_COOKIES_FILE",
+            "/etc/secrets/youtube_cookies.txt"
+        )
+
+        self.cookies_file = None
+
+        if os.path.exists(secret_cookie_file):
+
+            writable_cookie_file = os.path.join(
+                "/tmp",
+                "youtube_cookies.txt"
+            )
+
+            try:
+
+                shutil.copy2(
+                    secret_cookie_file,
+                    writable_cookie_file
+                )
+
+                self.cookies_file = (
+                    writable_cookie_file
+                )
+
+                print(
+                    "🍪 YouTube cookies loaded successfully."
+                )
+
+            except Exception as e:
+
+                print(
+                    f"⚠️ Could not copy YouTube cookies: {e}"
+                )
+
+        else:
+
+            print(
+                "⚠️ YouTube cookies file not found."
+            )
+
 
 
     def extract_video_id(self, url):
@@ -73,11 +138,20 @@ class YouTubeFeatureExtractor:
 
         ydl_opts = {
 
+            # Prefer low-resolution video because this
+            # is being used for scene/context analysis.
             "format":
-                "best[ext=mp4]/best",
+                "best[height<=360][ext=mp4]"
+                "/bestvideo[height<=360][ext=mp4]+bestaudio"
+                "/best[height<=480][ext=mp4]"
+                "/worst[ext=mp4]"
+                "/worst",
 
             "outtmpl":
                 video_path,
+
+            "noplaylist":
+                True,
 
             "quiet":
                 False,
@@ -85,31 +159,57 @@ class YouTubeFeatureExtractor:
             "no_warnings":
                 False,
 
+            "socket_timeout":
+                20,
+
+            "retries":
+                5,
+
+            "fragment_retries":
+                5,
+
+            "file_access_retries":
+                3,
+
             "http_headers": {
 
                 "User-Agent":
-                    "Mozilla/5.0 "
-                    "(Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 "
-                    "Safari/537.36",
+                    (
+                        "Mozilla/5.0 "
+                        "(Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 "
+                        "Safari/537.36"
+                    ),
 
                 "Accept-Language":
                     "en-US,en;q=0.9"
             },
-
-            "extractor_args": {
-
-                "youtube": {
-
-                    "player_client": [
-                        "android",
-                        "web"
-                    ]
+            
+            "js_runtimes": {
+                "node": {
+                    "path": "/usr/bin/node"
                 }
+            },
+
+            # Don't force Android/Web clients.
+            # Let the current yt-dlp extractor decide.
+            "extractor_args": {
+                "youtube": {}
             }
         }
+
+
+        # ==========================================================
+        # USE WRITABLE COOKIE COPY
+        # ==========================================================
+
+        if self.cookies_file:
+
+            ydl_opts["cookiefile"] = (
+                self.cookies_file
+            )
 
         with yt_dlp.YoutubeDL(
             ydl_opts
